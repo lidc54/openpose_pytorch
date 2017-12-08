@@ -7,14 +7,20 @@ import numpy as np
 from scipy.misc import imread
 import matplotlib.pyplot as plt
 import pylab
+# from matplotlib.collections import PatchCollection
+# from matplotlib.patches import Polygon
+import cv2
+import torch.utils.data as data
+import torch
 
+from netmodule.ground_truth import gt_S_L
 
 
 def readtest():
     # dataDir = '/home/flag54/Downloads/coco/'
     dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
     dataType = 'train2017'
-    annFile = '{}/annotations/person_keypoints_{}.json'.format(dataDir, dataType)
+    annFile = '{}annotations/person_keypoints_{}.json'.format(dataDir, dataType)
 
     # initialize COCO api for person_keypoints_ annotations
     coco = COCO(annFile)
@@ -34,77 +40,84 @@ def readtest():
         data = imread(img_path)
         annID = coco.getAnnIds(imgIds=img['id'])
         anns = coco.loadAnns(annID)
-        coco.showAnns(anns)
-        get_mask(data,anns[0])#anns has several people
+        get_mask(data, anns)  # anns has several people
         if (len(anns) == 1):
             return data, anns
 
 
-def get_mask(self, anns):
+def get_mask(data, anns):
+    height, widht, _ = data.shape
+    img = np.zeros((height, widht))
+    polygons = []
+    for ann in anns:
+        if 'segmentation' in ann:
+            if type(ann['segmentation']) == list:
+                # polygon
+                for seg in ann['segmentation']:
+                    poly = np.array(seg).reshape((int(len(seg) / 2), 2))
+                    polygons.append(poly.astype('int32'))
+    cv2.fillPoly(img, polygons, 1)
+    return img
+
+
+class coco_pose(data.Dataset):
+    """ coco keypoints DataSet Object
+    input is image, targets is annotation / confidentce map / PAF
+
     """
-    Display the specified annotations.
-    :param anns (array of object): annotations to display
-    :return: None
-    """
-    if len(anns) == 0:
-        return 0
-    if 'segmentation' in anns[0] or 'keypoints' in anns[0]:
-        datasetType = 'instances'
-    elif 'caption' in anns[0]:
-        datasetType = 'captions'
-    else:
-        raise Exception('datasetType not supported')
-    if datasetType == 'instances':
-        #ax = plt.gca()
-        #ax.set_autoscale_on(False)
-        polygons = []
-        color = []
-        for ann in anns:
-            c = (np.random.random((1, 3)) * 0.6 + 0.4).tolist()[0]
-            if 'segmentation' in ann:
-                if type(ann['segmentation']) == list:
-                    # polygon
-                    for seg in ann['segmentation']:
-                        poly = np.array(seg).reshape((int(len(seg) / 2), 2))
-                        polygons.append(Polygon(poly))
-                        color.append(c)
-                else:
-                    # mask
-                    t = self.imgs[ann['image_id']]
-                    if type(ann['segmentation']['counts']) == list:
-                        rle = maskUtils.frPyObjects([ann['segmentation']], t['height'], t['width'])
-                    else:
-                        rle = [ann['segmentation']]
-                    m = maskUtils.decode(rle)
-                    img = np.ones((m.shape[0], m.shape[1], 3))
-                    if ann['iscrowd'] == 1:
-                        color_mask = np.array([2.0, 166.0, 101.0]) / 255
-                    if ann['iscrowd'] == 0:
-                        color_mask = np.random.random((1, 3)).tolist()[0]
-                    for i in range(3):
-                        img[:, :, i] = color_mask[i]
-                    #ax.imshow(np.dstack((img, m * 0.5)))
-            if 'keypoints' in ann and type(ann['keypoints']) == list:
-                # turn skeleton into zero-based index
-                sks = np.array(self.loadCats(ann['category_id'])[0]['skeleton']) - 1
-                kp = np.array(ann['keypoints'])
-                x = kp[0::3]
-                y = kp[1::3]
-                v = kp[2::3]
-                for sk in sks:
-                    if np.all(v[sk] > 0):
-                        plt.plot(x[sk], y[sk], linewidth=3, color=c)
-                plt.plot(x[v > 0], y[v > 0], 'o', markersize=8, markerfacecolor=c, markeredgecolor='k',
-                         markeredgewidth=2)
-                plt.plot(x[v > 1], y[v > 1], 'o', markersize=8, markerfacecolor=c, markeredgecolor=c, markeredgewidth=2)
-        p = PatchCollection(polygons, facecolor=color, linewidths=0, alpha=0.4)
-        ax.add_collection(p)
-        p = PatchCollection(polygons, facecolor='none', edgecolors=color, linewidths=2)
-        ax.add_collection(p)
-    elif datasetType == 'captions':
-        for ann in anns:
-            print(ann['caption'])
+
+    def __init__(self, dataDir, dataType, annType, signle=False):
+        self.signle = signle
+        self.load_data(dataDir, dataType, annType)
+
+    def __len__(self):
+        return len(self.ids)
+
+    def __getitem__(self, item):
+        data, mask, S, L = self.pull_item(item)
+
+    def load_data(self, dataDir, dataType, annType):
+        annFile = '{}annotations/{}_{}.json'.format(dataDir, annType, dataType)
+        self.coco = COCO(annFile)
+        catID = self.coco.getCatIds(catNms=['person'])
+        imgID = self.coco.getImgIds(catIds=catID)
+        if self.signle:
+            self.ids = []
+            for id in imgID:
+                img = self.coco.loadImgs(id)[0]
+                annID = self.coco.getAnnIds(imgIds=img['id'])
+                anns = self.coco.loadAnns(annID)
+                if len(anns) == 1:
+                    self.ids.append(id)
+        else:
+            self.ids = imgID
+        print('ok')
+
+    def pull_item(self, img_id):
+        img = self.coco.loadImgs([img_id])[0]
+        img_path = '%s%s/%s' % (dataDir, dataType, img['file_name'])
+        data = imread(img_path)
+        annID = self.coco.getAnnIds(imgIds=img['id'])
+        anns = self.coco.loadAnns(annID)
+
+        mask = get_mask(data, anns)  # anns has several people
+        S, L = gt_S_L(data, anns)
+
+        data = torch.from_numpy(data).permute(2, 0, 1)
+        mask = torch.from_numpy(mask)
+        S = torch.from_numpy(S)
+        L = torch.from_numpy(L)
+
+        return data, mask, S, L
 
 
 if __name__ == "__main__":
-    readtest()
+    # readtest()
+    # dataDir = '/home/flag54/Downloads/coco/'
+    dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
+    dataType = 'train2017'
+    annType = 'person_keypoints'
+
+    test = coco_pose(dataDir, dataType, annType, True)
+    x = test[262146]
+    print('l')

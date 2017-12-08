@@ -4,7 +4,7 @@ import torch
 import numpy as np
 
 import math
-from netmodule.loadimg import *
+#from netmodule.loadimg import *
 from netmodule.config_file import *
 
 
@@ -159,6 +159,43 @@ class L_part_affinity_vector():
         return self.canvas
 
 
+def gt_S_L(data,anno):
+    """
+    prepaer S for confidence map & L for part affinity
+    :return:
+    """
+    keypoints_list = [i.get('keypoints') for i in anno if 'keypoints' in i]
+    num_persons = len(anno)
+    height, width, _ = data.shape
+    parts_of_coco = 17  # 18 in openpose
+
+    S = S_part_conf_map(width, height, keypoints_list, parts_of_coco)
+    s_canvas = S.S_jk()
+
+    #show s_canvas
+    ss = np.max(s_canvas, axis=0)
+    sss = data * 0
+    for i in range(3):
+        sss[:, :, i] = (ss * 255) * 0.3 + data[:, :, i] * 0.7
+    # plt.imshow(sss)
+
+    print("next is L")
+
+    part_to_limb = coco['keypoints']  # coco18['keypoints']
+    limb_sequence = coco['skeleton']  # coco18['limbSequence']
+    L = L_part_affinity_vector(limb_sequence, keypoints_list, width, height)
+    l_canvas = L.L_ck()
+
+    #show l_canvas
+    ss1 = np.max(l_canvas, axis=0)
+    sss1 = data * 0
+    for i in range(3):
+        sss1[:, :, i] = (ss1 * 255) * 0.3 + data[:, :, i] * 0.7
+    # plt.imshow(sss1)
+
+    print('okLK')
+    return s_canvas,l_canvas
+'''
 def data_prepare():
     """
     prepare confidence map S & part association L
@@ -190,7 +227,7 @@ def data_prepare():
         sss1[:, :, i] = (ss1 * 255) * 0.3 + data[:, :, i] * 0.7
     # plt.imshow(sss1)
     print('okLK')
-
+'''
 
 if __name__ == "__main__":
     data_prepare()
