@@ -22,7 +22,7 @@ class loss_conf(torch.nn.Module):
         """
         super(loss_conf, self).__init__()
 
-    def forward(self, predication, ground_truth):
+    def forward(self, predication, wp, sp):
         """
         pre shape: batch * parts * h * w
         wp shape: h*w
@@ -32,23 +32,24 @@ class loss_conf(torch.nn.Module):
             ground truth confidence map
         :return:
         """
-        wp, sp = ground_truth
-        wp=wp.expand(sp.shape)
-        loss_S=wp*(predication-sp)**2
+        # wp, sp = ground_truth
+
+        wp = wp.expand(sp.shape)
+        loss_S = wp * (predication - sp.repeat(1, 6, 1, 1)) ** 2
         loss_S.data.sum()
         return loss_S
 
 
-class loss_PAF():
+class loss_PAF(torch.nn.Module):
     """ground truth part affinity vector field
         f(L,t) = W(P)*L2((Lt-L*))
         Variable()
     """
 
     def __init__(self):
-        super(loss_PAF,self).__init__()
+        super(loss_PAF, self).__init__()
 
-    def forward(self,prediction,ground_truth):
+    def forward(self, prediction, wp, lp):
         """
 
         :param prediction:
@@ -58,18 +59,20 @@ class loss_PAF():
             L ground truth part affinity vector field
         :return:
         """
-        wp,lp=ground_truth
-        wp=wp.expand_as(lp)
-        loss_L=wp*(prediction-lp)**2
+        # wp, lp = ground_truth
+        wp = wp.expand_as(prediction)
+        loss_L = wp * (prediction - lp.repeat(1, 6, 1, 1)) ** 2
         loss_L.data.sum()
         return loss_L
+
 
 class loss(torch.nn.Module):
     """
     final loss function
     """
+
     def __init__(self):
-        pass
+        super(loss, self).__init__()
 
     def forward(self, *input):
         """
@@ -77,23 +80,17 @@ class loss(torch.nn.Module):
         :param input:
         :return:
         """
-        loss=sum(input.data)
+        loss = sum(input.data)
         return loss
 
 
+def reshape_as(img, target):
+    batch, channel, h, w = target.size()
+    _, c_d, h_d, w_d = img.size()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # $ h & w
+    try:
+        img = img.data.numpy()
+    except:
+        img = img.data.cpu().numpy()
+    data=data.reshape()

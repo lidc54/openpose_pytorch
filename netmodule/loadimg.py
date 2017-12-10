@@ -68,13 +68,17 @@ class coco_pose(data.Dataset):
 
     def __init__(self, dataDir, dataType, annType, signle=False):
         self.signle = signle
+        self.data_dir = dataDir
+        self.data_type = dataType
         self.load_data(dataDir, dataType, annType)
 
     def __len__(self):
         return len(self.ids)
 
     def __getitem__(self, item):
-        data, mask, S, L = self.pull_item(item)
+        id = self.ids[item]
+        data, mask, S, L = self.pull_item(id)
+        return data, mask, S, L
 
     def load_data(self, dataDir, dataType, annType):
         annFile = '{}annotations/{}_{}.json'.format(dataDir, annType, dataType)
@@ -95,7 +99,7 @@ class coco_pose(data.Dataset):
 
     def pull_item(self, img_id):
         img = self.coco.loadImgs([img_id])[0]
-        img_path = '%s%s/%s' % (dataDir, dataType, img['file_name'])
+        img_path = '%s%s/%s' % (self.data_dir, self.data_type, img['file_name'])
         data = imread(img_path)
         annID = self.coco.getAnnIds(imgIds=img['id'])
         anns = self.coco.loadAnns(annID)
@@ -103,21 +107,22 @@ class coco_pose(data.Dataset):
         mask = get_mask(data, anns)  # anns has several people
         S, L = gt_S_L(data, anns)
 
-        data = torch.from_numpy(data).permute(2, 0, 1)
-        mask = torch.from_numpy(mask)
-        S = torch.from_numpy(S)
-        L = torch.from_numpy(L)
+        # all is tensor
+        data = torch.from_numpy(data.astype('float32')).permute(2, 0, 1)
+        mask = torch.from_numpy(mask.astype('float'))
+        S = torch.from_numpy(S.astype('float'))
+        L = torch.from_numpy(L.astype('float'))
 
         return data, mask, S, L
 
 
 if __name__ == "__main__":
     # readtest()
-    # dataDir = '/home/flag54/Downloads/coco/'
-    dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
+    dataDir = '/home/flag54/Downloads/coco/'
+    # dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
     dataType = 'train2017'
     annType = 'person_keypoints'
 
     test = coco_pose(dataDir, dataType, annType, True)
-    x = test[262146]
+    x = test[262]
     print('l')
