@@ -12,8 +12,8 @@ from netmodule.loss_function import *
 
 
 def train():
-    dataDir = '/home/flag54/Downloads/coco/'
-    # dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
+    # dataDir = '/home/flag54/Downloads/coco/'
+    dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
     dataType = 'train2017'
     annType = 'person_keypoints'
     dataset = coco_pose(dataDir, dataType, annType, True)
@@ -30,7 +30,7 @@ def train():
     # load net & init
     net = build_pose('train')
     init_net(net)
-    # net = torch.nn.DataParallel(net).cuda()
+    net = torch.nn.DataParallel(net).cuda()
     cudnn.benchmark = True
 
     # loss fn
@@ -58,10 +58,10 @@ def train():
         S = Variable(S)  # .cuda()
         L = Variable(L)  # .cuda()
 
-        conf1, paf1, conf2, paf2, conf3, paf3, conf4, paf4, conf5, paf5, conf6, paf6 = net(
-            img)
-        conf = torch.cat([conf1, conf2, conf3, conf4, conf5, conf6], 1)
-        paf = torch.cat([paf1, paf2, paf3, paf4, paf5, paf6], 1)
+        conf, paf, out = net(img)
+        # conf1, paf1, conf2, paf2, conf3, paf3, conf4, paf4, conf5, paf5, conf6, paf6 = net(img)
+        conf = torch.cat(conf, 1)
+        paf = torch.cat(paf, 1)
 
         ls = loss_S(conf, mask, S)
         ll = loss_L(paf, mask, L)

@@ -27,8 +27,9 @@ class open_pose(nn.Module):
 
         # openpose network
         self.vgg = nn.ModuleList(base)
-        self.conf_bra = []
-        self.paf_bra = []
+
+        conf_bra_list = []
+        paf_bra_list = []
 
         # param for branch network
         in_channels = 128
@@ -41,16 +42,45 @@ class open_pose(nn.Module):
                 branches = branches_cfg[0]
                 conv_sz = stage[0]
 
-            self.conf_bra.append(nn.ModuleList(add_extra(in_channels, branches[0], conv_sz)))
-            self.paf_bra.append(nn.ModuleList(add_extra(in_channels, branches[1], conv_sz)))
+            conf_bra_list.append(nn.Sequential(*add_extra(in_channels, branches[0], conv_sz)))
+            paf_bra_list.append(nn.Sequential(*add_extra(in_channels, branches[1], conv_sz)))
             in_channels = 185
 
+        # to list
+        self.conf_bra = nn.ModuleList(conf_bra_list)
+        self.paf_bra = nn.ModuleList(paf_bra_list)
+
     def forward(self, x):
-        out = x
+        out_0 = x
         # the base transform
         for k in range(len(self.vgg)):
-            out = self.vgg[k](out)
+            out_0 = self.vgg[k](out_0)
 
+        # local name space
+        name = locals()
+        confs = []
+        pafs = []
+        outs = []
+
+        length = len(self.conf_bra)
+        for i in range(length):
+            name['conf_%s' % (i + 1)] = self.conf_bra[i](name['out_%s' % i])
+            name['paf_%s' % (i + 1)] = self.paf_bra[i](name['out_%s' % i])
+            name['out_%s' % (i + 1)] = torch.cat([name['conf_%s' % (i + 1)], name['paf_%s' % (i + 1)], out_0], 1)
+            confs.append('conf_%s' % (i + 1))
+            pafs.append('paf_%s' % (i + 1))
+            outs.append('out_%s' % (i + 1))
+        for i in range(length):
+            confs[i] = name.get(confs[i])
+            pafs[i] = name.get(pafs[i])
+            outs[i] = name.get(outs[i])
+
+        return confs, pafs, outs
+
+    def add_stages(self, i=128, all_stage=6):
+        pass
+
+        '''
         # two branches1
         conf1 = paf1 = out
         for i in range(len(self.conf_bra[0])):
@@ -106,6 +136,7 @@ class open_pose(nn.Module):
         # out6 = torch.cat([conf6, paf6, out], 1)
 
         return conf1, paf1, conf2, paf2, conf3, paf3, conf4, paf4, conf5, paf5, conf6, paf6
+        '''
 
 
 # used for add two branches as well as adatp to ceratin stage
