@@ -90,7 +90,8 @@ class L_part_affinity_vector():
         """
         self.limbSequence = limbSequence  # if type(limbSequence[0]) == list else [limbSequence]
         self.nlimbSeq = len(limbSequence)  # // 2
-        self.canvas = np.zeros((self.nlimbSeq, height, width)).astype('float')
+        self.canvas = np.zeros((self.nlimbSeq * 2, height, width)).astype('float32')  # x & y
+        self.ncp = np.zeros((self.nlimbSeq, height, width))  # how many person overlap at certain part
         self.pose = pose_loc
         self.w_canvas = width
         self.h_canvas = height
@@ -114,7 +115,7 @@ class L_part_affinity_vector():
         # person numbers
         person = len(self.pose)
         for l in range(self.nlimbSeq):
-            stickwidth = self.h_canvas / 60  # fixed ::alert!
+            stickwidth = max(self.h_canvas / 60, 1.0)  # fixed ::alert!
 
             # a point in the graph
             limb_a, limb_b = self.limbSequence[l]
@@ -138,22 +139,38 @@ class L_part_affinity_vector():
                 x_p = (x_a + x_b) / 2
                 y_p = (y_a + y_b) / 2
 
+                abL=np.sqrt((x_a - x_b) ** 2 + (y_a - y_b) ** 2)
+
+                a_sqrt = (x_a - x_p) ** 2 + (y_a - y_p) ** 2
+                b_sqrt = stickwidth ** 2
+
+                cos = abs(x_a - x_b) / abL
+                sin = abs(y_a - y_p) / abL
+                '''
                 # cos sin
                 if x_b != x_a:
-                    angle = math.atan((y_b - y_a) / (x_b - x_a))
+                    angle = math.atan(abs((y_b - y_a) / (x_b - x_a)))
                 else:
                     angle = math.pi / 2
                 cos = math.cos(angle)
                 sin = math.sin(angle)
-                a_sqrt = (x_a - x_p) ** 2 + (y_a - y_p) ** 2
-                b_sqrt = stickwidth ** 2
+                '''
 
                 # unkownen solution
                 A = (x - x_p) * cos + (y - y_p) * sin
                 B = (x - x_p) * sin - (y - y_p) * cos
                 judge = A * A / a_sqrt + B * B / b_sqrt
-                # if (0 <= judge <= 1):
-                self.canvas[l] += (judge >= 0) & (judge <= 1)
+                judge = (judge >= 0) & (judge <= 1)  # numpy
+                self.canvas[2 * l] += cos * judge
+                self.canvas[2 * l + 1] += sin * judge
+                self.ncp[l] += judge
+
+        # averages the affinity fields
+        for l in range(self.nlimbSeq):
+            self.ncp[l] += (self.ncp[l] == 0)
+            self.canvas[2 * l] = self.canvas[2 * l] / self.ncp[l]
+            self.canvas[2 * l + 1] = self.canvas[2 * l + 1] / self.ncp[l]
+
         return self.canvas
 
 
@@ -177,7 +194,7 @@ def gt_S_L(data, anno):
         sss[:, :, i] = (ss * 255) * 0.3 + data[:, :, i] * 0.7
     # plt.imshow(sss)
 
-    #print("next is L")
+    # print("next is L")
 
     part_to_limb = coco['keypoints']  # coco18['keypoints']
     limb_sequence = coco['skeleton']  # coco18['limbSequence']
@@ -230,4 +247,5 @@ def data_prepare():
 '''
 
 if __name__ == "__main__":
-    data_prepare()
+    S, L = gt_S_L()
+    print('ok')
