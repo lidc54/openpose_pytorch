@@ -34,7 +34,8 @@ class S_part_conf_map():
         width, height, keypoints, parts = self.width, self.height, self.keypoints, self.parts
         sigma = 3 * height / 200
         person = len(keypoints)  # number of people in this photo
-        canvas = np.zeros((parts, height, width)).astype('float')
+        # the last dimension will be zero
+        canvas = np.zeros((parts + 1, height, width)).astype('float32')
         # multi thread--------------------
         for i in range(person):
             heat_points = keypoints[i]
@@ -49,6 +50,7 @@ class S_part_conf_map():
                 #             (parts_conf < confidence_map) * confidence_map
                 canvas[j] = (canvas[j] > confidence_map) * canvas[j] + \
                             (canvas[j] < confidence_map) * confidence_map
+
         return canvas
 
     def gaussian(self, width, height, coor, sigma=4):
@@ -60,9 +62,9 @@ class S_part_conf_map():
         :param sigma:
         :return:
         """
-        ny = np.arange(height).astype('float')
+        ny = np.arange(height).astype('float32')
         ny = np.tile(ny, (width, 1)).T
-        nx = np.arange(width).astype('float')
+        nx = np.arange(width).astype('float32')
         nx = np.tile(nx, (height, 1))
         x, y = coor
         S = ((nx - x) ** 2 + (ny - y) ** 2) / (sigma ** 2)
@@ -107,9 +109,9 @@ class L_part_affinity_vector():
         """
         # nlimbSeq, h_canvas, w_canvas = self.nlimbSeq, self.heigth, self.width
         # set canvas
-        y = np.arange(self.h_canvas).astype('float')
+        y = np.arange(self.h_canvas).astype('float32')
         y = np.tile(y, (self.w_canvas, 1)).T
-        x = np.arange(self.w_canvas).astype('float')
+        x = np.arange(self.w_canvas).astype('float32')
         x = np.tile(x, (self.h_canvas, 1))
 
         # person numbers
@@ -119,7 +121,7 @@ class L_part_affinity_vector():
 
             # a point in the graph
             limb_a, limb_b = self.limbSequence[l]
-            limb_a, limb_b = limb_a - 1, limb_b - 1
+            limb_a, limb_b = limb_a, limb_b
             # = limb_sequence[l + 1]
 
             # loop for all person
@@ -139,30 +141,29 @@ class L_part_affinity_vector():
                 x_p = (x_a + x_b) / 2
                 y_p = (y_a + y_b) / 2
 
-                abL=np.sqrt((x_a - x_b) ** 2 + (y_a - y_b) ** 2)
+                # abL=np.sqrt((x_a - x_b) ** 2 + (y_a - y_b) ** 2)
 
                 a_sqrt = (x_a - x_p) ** 2 + (y_a - y_p) ** 2
                 b_sqrt = stickwidth ** 2
 
-                cos = abs(x_a - x_b) / abL
-                sin = abs(y_a - y_p) / abL
-                '''
+                # cos = abs(x_a - x_b) / abL
+                # sin = abs(y_a - y_b) / abL
+
                 # cos sin
                 if x_b != x_a:
-                    angle = math.atan(abs((y_b - y_a) / (x_b - x_a)))
+                    angle = math.atan((y_b - y_a) / (x_b - x_a))
                 else:
                     angle = math.pi / 2
                 cos = math.cos(angle)
                 sin = math.sin(angle)
-                '''
 
                 # unkownen solution
                 A = (x - x_p) * cos + (y - y_p) * sin
                 B = (x - x_p) * sin - (y - y_p) * cos
                 judge = A * A / a_sqrt + B * B / b_sqrt
                 judge = (judge >= 0) & (judge <= 1)  # numpy
-                self.canvas[2 * l] += cos * judge
-                self.canvas[2 * l + 1] += sin * judge
+                self.canvas[2 * l] += abs(cos) * judge
+                self.canvas[2 * l + 1] += abs(sin) * judge
                 self.ncp[l] += judge
 
         # averages the affinity fields
@@ -179,10 +180,12 @@ def gt_S_L(data, anno):
     prepaer S for confidence map & L for part affinity
     :return:
     """
-    keypoints_list = [i.get('keypoints') for i in anno if 'keypoints' in i]
+    anno, parts_of_coco = prepare_data(anno)
     num_persons = len(anno)
+    keypoints_list = [i.get('keypoints') for i in anno if 'keypoints' in i]
+
     height, width, _ = data.shape
-    parts_of_coco = 17  # 18 in openpose
+    # parts_of_coco = 17  # 18 in openpose
 
     S = S_part_conf_map(width, height, keypoints_list, parts_of_coco)
     s_canvas = S.S_jk()
@@ -195,9 +198,13 @@ def gt_S_L(data, anno):
     # plt.imshow(sss)
 
     # print("next is L")
-
+    '''
     part_to_limb = coco['keypoints']  # coco18['keypoints']
     limb_sequence = coco['skeleton']  # coco18['limbSequence']
+    '''
+    part_to_limb = coco_openpose['keypoints']  # coco18['keypoints']
+    limb_sequence = coco_openpose['skeleton']  # coco18['limbSequence']
+
     L = L_part_affinity_vector(limb_sequence, keypoints_list, width, height)
     l_canvas = L.L_ck()
 
@@ -210,6 +217,34 @@ def gt_S_L(data, anno):
 
     print('okLK')
     return s_canvas, l_canvas
+
+
+def prepare_data(anno):
+    """
+    aim to add keypoints "neck" in anno
+    :param anno:
+    :return:
+    """
+    left_shoulder = 5
+    right_shoulder = 6
+    part_nums = 0
+
+    for target in anno:
+        lx, ly, lv = target['keypoints'][3 * left_shoulder:(3 * left_shoulder + 3)]
+        rx, ry, rv = target['keypoints'][3 * right_shoulder:(3 * right_shoulder + 3)]
+        if lv and rv:
+            neck_v = (lv + rv) // 2
+            neck_x = (lx + rx) // 2
+            neck_y = (ly + ry) // 2
+        else:
+            neck_v, neck_x, neck_y = 0, 0, 0
+        neck = [neck_v, neck_y, neck_x]
+        for i in neck:
+            target['keypoints'].insert(0, i)
+        if neck_v:
+            target['num_keypoints'] += 1
+        part_nums = len(target['keypoints']) // 3
+    return anno, part_nums
 
 
 '''

@@ -60,17 +60,59 @@ def get_mask(data, anns):
     return img
 
 
+def size_adjust(data, row=560, col=656, scales=1):
+    """
+    adjust data to certain size
+    :param data:
+    :param row: default 658 (a*16)
+    :param col: default 368 (b*16)
+    :param scales: to squeeze to this scale,resize again
+    :return:
+    """
+    height, width, *channel = data.shape
+    if height / width > row / col:
+        ratio = height / row
+    else:
+        ratio = width / col
+    out = cv2.resize(data, (int(width / ratio), int(height / ratio)), interpolation=cv2.INTER_NEAREST)
+    h, w, *_ = out.shape
+    pad_x = max(0, col - w) // 2
+    pad_y = max(0, row - h) // 2
+
+    # padding for this image
+    if channel:
+        c = channel[0]
+        out_ = np.zeros((row, col, c)).astype(data.dtype)
+        out_[pad_y:pad_y + min(h, row), pad_x:pad_x + min(w, col), :] = out[0:min(h, row), 0:min(w, col), :]
+    else:
+        out_ = np.zeros((row, col)).astype(data.dtype)
+        out_[pad_y:pad_y + min(h, row), pad_x:pad_x + min(w, col)] = out[0:min(h, row), 0:min(w, col)]
+
+    # resize to certain scale
+    out_ = cv2.resize(out_, (col // scales, row // scales), interpolation=cv2.INTER_NEAREST)
+    return out_
+
+
 class coco_pose(data.Dataset):
     """ coco keypoints DataSet Object
     input is image, targets is annotation / confidentce map / PAF
 
     """
 
-    def __init__(self, dataDir, dataType, annType, signle=False):
+    def __init__(self, dataDir, dataType, annType, signle=False, scales=8):
+        """
+
+        :param dataDir:
+        :param dataType:
+        :param annType:
+        :param signle: multi-person or signle person
+        :param scales: default is 8,for vgg has three pooling layers
+        """
         self.signle = signle
         self.data_dir = dataDir
         self.data_type = dataType
         self.load_data(dataDir, dataType, annType)
+        self.scale = scales
 
     def __len__(self):
         return len(self.ids)
@@ -101,28 +143,40 @@ class coco_pose(data.Dataset):
         img = self.coco.loadImgs([img_id])[0]
         img_path = '%s%s/%s' % (self.data_dir, self.data_type, img['file_name'])
         data = imread(img_path)
+        # data = data.transpose((2, 0, 1))
+        # data=cv2.imread(img_path)
         annID = self.coco.getAnnIds(imgIds=img['id'])
         anns = self.coco.loadAnns(annID)
 
         mask = get_mask(data, anns)  # anns has several people
         S, L = gt_S_L(data, anns)
 
+        # adjust their size to certain ones
+        S = S.transpose((1, 2, 0))
+        L = L.transpose((1, 2, 0))
+        data = size_adjust(data)
+        S = size_adjust(S, scales=self.scale)  #
+        L = size_adjust(L, scales=self.scale)  #
+        mask = size_adjust(mask, scales=self.scale)  #
+
+        ss = np.max(S, axis=2)
+        ll = np.max(L, axis=2)
         # all is tensor
         data = torch.from_numpy(data.astype('float32')).permute(2, 0, 1)
-        mask = torch.from_numpy(mask.astype('float'))
-        S = torch.from_numpy(S.astype('float'))
-        L = torch.from_numpy(L.astype('float'))
+        mask = torch.from_numpy(mask.astype('float32'))
+        S = torch.from_numpy(S.astype('float32')).permute(2, 0, 1)
+        L = torch.from_numpy(L.astype('float32')).permute(2, 0, 1)
 
         return data, mask, S, L
 
 
 if __name__ == "__main__":
     # readtest()
-    dataDir = '/home/flag54/Downloads/coco/'
-    # dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
+    # dataDir = '/home/flag54/Downloads/coco/'
+    dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
     dataType = 'train2017'
     annType = 'person_keypoints'
 
     test = coco_pose(dataDir, dataType, annType, True)
-    x = test[262]
+    x = test[200]
     print('l')

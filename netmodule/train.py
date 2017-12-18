@@ -6,6 +6,8 @@ import torch.nn.init as init
 import torch.backends.cudnn as cudnn
 import torch.optim as optim
 from torch.autograd import Variable
+import cv2
+
 from netmodule.loadimg import coco_pose
 from netmodule.net import build_pose
 from netmodule.loss_function import *
@@ -16,28 +18,28 @@ def train():
     dataDir = '/media/flag54/54368BA9368B8AA6/DataSet/coco/'
     dataType = 'train2017'
     annType = 'person_keypoints'
-    dataset = coco_pose(dataDir, dataType, annType, True)
+    dataset = coco_pose(dataDir, dataType, annType, True)  # true meaning to single
 
     # some super parameters
     max_iter = 120000
-    batch_size = 1
+    batch_size = 3
     epoch_size = len(dataset) // batch_size
 
     # load data
-    data_loader = data.DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4,
-                                  drop_last=True, pin_memory=True, collate_fn=my_collate)
+    data_loader = data.DataLoader(dataset, batch_size=batch_size, shuffle=False,
+                                  drop_last=True, collate_fn=my_collate)  # pin_memory=True,
 
     # load net & init
     net = build_pose('train')
     init_net(net)
-    net = torch.nn.DataParallel(net).cuda()
-    cudnn.benchmark = True
+    # net = torch.nn.DataParallel(net).cuda()
+    # net.cuda()
+    #cudnn.benchmark = True
 
     # loss fn
     loss_S = loss_conf()
     loss_L = loss_PAF()
 
-    batch_iterator = None
     t0 = time.time()
     lr = 0.9
     momentum = 0.9
@@ -46,6 +48,7 @@ def train():
     optimizer = optim.SGD(net.parameters(), lr, momentum=momentum,
                           weight_decay=weight_decay)
 
+    batch_iterator = None
     for iteration in range(max_iter):
         if (not batch_iterator) or (iteration % epoch_size == 0):
             # create batch iterator
