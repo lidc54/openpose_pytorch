@@ -109,6 +109,7 @@ class L_part_affinity_vector():
         """
         # nlimbSeq, h_canvas, w_canvas = self.nlimbSeq, self.heigth, self.width
         # set canvas
+        eps = 1E-15
         y = np.arange(self.h_canvas).astype('float32')
         y = np.tile(y, (self.w_canvas, 1)).T
         x = np.arange(self.w_canvas).astype('float32')
@@ -143,7 +144,7 @@ class L_part_affinity_vector():
 
                 # abL=np.sqrt((x_a - x_b) ** 2 + (y_a - y_b) ** 2)
 
-                a_sqrt = (x_a - x_p) ** 2 + (y_a - y_p) ** 2
+                a_sqrt = (x_a - x_p) ** 2 + (y_a - y_p) ** 2 + eps
                 b_sqrt = stickwidth ** 2
 
                 # cos = abs(x_a - x_b) / abL
@@ -180,9 +181,20 @@ def gt_S_L(data, anno):
     prepaer S for confidence map & L for part affinity
     :return:
     """
-    anno, parts_of_coco = prepare_data(anno)
-    num_persons = len(anno)
+    '''
+    part_to_limb = coco['keypoints']  # coco18['keypoints']
+    limb_sequence = coco['skeleton']  # coco18['limbSequence']
+    '''
+    part_to_limb = coco_openpose['keypoints']  # coco18['keypoints']
+    limb_sequence = coco_openpose['skeleton']  # coco18['limbSequence']
     keypoints_list = [i.get('keypoints') for i in anno if 'keypoints' in i]
+
+    if len(keypoints_list[0]) // 3 != len(part_to_limb):  # multi person[[],[]]
+        anno, parts_of_coco = prepare_data(anno)
+        keypoints_list = [i.get('keypoints') for i in anno if 'keypoints' in i]
+    else:
+        parts_of_coco = len(keypoints_list[0]) // 3
+    num_persons = len(anno)
 
     height, width, _ = data.shape
     # parts_of_coco = 17  # 18 in openpose
@@ -198,12 +210,7 @@ def gt_S_L(data, anno):
     # plt.imshow(sss)
 
     # print("next is L")
-    '''
-    part_to_limb = coco['keypoints']  # coco18['keypoints']
-    limb_sequence = coco['skeleton']  # coco18['limbSequence']
-    '''
-    part_to_limb = coco_openpose['keypoints']  # coco18['keypoints']
-    limb_sequence = coco_openpose['skeleton']  # coco18['limbSequence']
+
 
     L = L_part_affinity_vector(limb_sequence, keypoints_list, width, height)
     l_canvas = L.L_ck()

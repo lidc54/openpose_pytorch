@@ -5,6 +5,7 @@ this function consist several stages of the networks
 '''
 import torch
 import torch.nn as nn
+from torch.autograd.variable import Variable
 
 # openpose use first 10 layers of vgg19
 vgg_cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 256,
@@ -51,7 +52,8 @@ class open_pose(nn.Module):
         self.conf_bra = nn.ModuleList(conf_bra_list)
         self.paf_bra = nn.ModuleList(paf_bra_list)
 
-    def forward(self, x):
+    def forward(self, x, mask):
+        masks = Variable(mask).cuda()  # .expand(predication.shape)
         out_0 = x
         # the base transform
         for k in range(len(self.vgg)):
@@ -65,8 +67,8 @@ class open_pose(nn.Module):
 
         length = len(self.conf_bra)
         for i in range(length):
-            name['conf_%s' % (i + 1)] = self.conf_bra[i](name['out_%s' % i])
-            name['paf_%s' % (i + 1)] = self.paf_bra[i](name['out_%s' % i])
+            name['conf_%s' % (i + 1)] = self.conf_bra[i](name['out_%s' % i]) * masks
+            name['paf_%s' % (i + 1)] = self.paf_bra[i](name['out_%s' % i]) * masks
             name['out_%s' % (i + 1)] = torch.cat([name['conf_%s' % (i + 1)], name['paf_%s' % (i + 1)], out_0], 1)
             confs.append('conf_%s' % (i + 1))
             pafs.append('paf_%s' % (i + 1))

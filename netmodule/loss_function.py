@@ -6,7 +6,7 @@ import torch.functional as F
 
 #  S=S*,L=L*  --  Loss=S+L
 
-class loss_conf(torch.nn.Module):
+class lossPose(torch.nn.Module):
     """ confidence map loss & part affinity field
     target:
         1) produce part confidence map loss at stage t
@@ -20,7 +20,7 @@ class loss_conf(torch.nn.Module):
         """
          confidence maps S1 = ρ1 (F)
         """
-        super(loss_conf, self).__init__()
+        super(lossPose, self).__init__()
 
     def forward(self, predication, wp, sp):
         """
@@ -34,9 +34,14 @@ class loss_conf(torch.nn.Module):
         """
         # wp, sp = ground_truth
         batchs, _, w, h = predication.shape
-        mask = Variable(wp.expand(predication.shape)).cuda()
-        loss_S = mask * (predication - Variable(sp.repeat(1, 6, 1, 1)).cuda()) ** 2
-        return loss_S.sum() / (batchs)  # * w * h
+        # mask = Variable(wp.expand(predication.shape)).cuda()
+
+        try:
+            loss_S = (predication - Variable(sp.repeat(1, 6, 1, 1)).cuda()) ** 2  # mask *
+            return loss_S.sum() / (batchs)  # * w * h
+        except Exception as e:
+            print('wowo:', e)
+            return None
 
 
 class loss_PAF(torch.nn.Module):
@@ -62,6 +67,7 @@ class loss_PAF(torch.nn.Module):
         batchs, _, w, h = prediction.shape
         mask = Variable(wp.expand_as(prediction.data)).cuda()
         loss_L = mask * (prediction - Variable(lp.repeat(1, 6, 1, 1)).cuda()) ** 2
+
         return loss_L.sum() / (batchs)  # * w * h
 
 

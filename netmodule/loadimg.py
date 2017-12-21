@@ -142,6 +142,13 @@ class coco_pose(data.Dataset):
     def __getitem__(self, item):
         id = self.ids[item]
         data, mask, S, L = self.pull_item(id)
+        # dim of S is (19,*,*),L is (38,*,*)
+        if (S.shape)[0] != 19:
+            print('s.shape is not 19 for id {} and item{}.'.format(id, item))
+            S = S[:19]
+        if (L.shape)[0] != 38:
+            print('L.shape is not 38 for id {} and item{}.'.format(id, item))
+            L = L[:38]
         return data, mask, S, L
 
     def load_data(self, dataDir, dataType, annType):
@@ -202,5 +209,7 @@ if __name__ == "__main__":
     annType = 'person_keypoints'
 
     test = coco_pose(dataDir, dataType, annType, True)
-    x = test[200]
+    x = test[24643]
+    x = test[24643]
+    x = test[24643]
     print('l')

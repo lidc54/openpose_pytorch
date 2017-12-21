@@ -13,3 +13,5 @@ coco_openpose = {"skeleton": [[6, 8], [8, 10], [7, 9], [9, 11], [12, 14], [14, 1
                  "keypoints": ["neck", "nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder",
                                "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist",
                                "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]}
+
+path_vgg='../vgg19-dcbb9e9d.pth'
