@@ -14,4 +14,5 @@ coco_openpose = {"skeleton": [[6, 8], [8, 10], [7, 9], [9, 11], [12, 14], [14, 1
                                "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist",
                                "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle"]}
 
-path_vgg='../vgg19-dcbb9e9d.pth'
+path_vgg = '../vgg19-dcbb9e9d.pth'
+size_img = (560, 560)

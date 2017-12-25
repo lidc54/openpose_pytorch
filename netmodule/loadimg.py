@@ -8,13 +8,13 @@ import numpy as np
 from scipy.misc import imread
 import matplotlib.pyplot as plt
 import pylab
-# from matplotlib.collections import PatchCollection
-# from matplotlib.patches import Polygon
+
 import cv2
 import torch.utils.data as data
 import torch
-
+from netmodule.config_file import *
 from netmodule.ground_truth import gt_S_L
+from netmodule.Trans import *  # trans_img
 
 
 def readtest():
@@ -135,6 +135,7 @@ class coco_pose(data.Dataset):
         self.data_type = dataType
         self.load_data(dataDir, dataType, annType)
         self.scale = scales
+        self.sizeTo = size_img
 
     def __len__(self):
         return len(self.ids)
@@ -142,13 +143,17 @@ class coco_pose(data.Dataset):
     def __getitem__(self, item):
         id = self.ids[item]
         data, mask, S, L = self.pull_item(id)
-        # dim of S is (19,*,*),L is (38,*,*)
-        if (S.shape)[0] != 19:
-            print('s.shape is not 19 for id {} and item{}.'.format(id, item))
-            S = S[:19]
-        if (L.shape)[0] != 38:
-            print('L.shape is not 38 for id {} and item{}.'.format(id, item))
-            L = L[:38]
+
+        data = trans_img(data)
+
+        ss = np.max(S, axis=0)
+        ll = np.max(L, axis=0)
+
+        data = torch.from_numpy(data.astype('float32')).permute(2, 0, 1)
+        mask = torch.unsqueeze(torch.from_numpy(mask.astype('float32')), 0)
+        S = torch.from_numpy(S.astype('float32'))
+        L = torch.from_numpy(L.astype('float32'))
+
         return data, mask, S, L
 
     def load_data(self, dataDir, dataType, annType):
@@ -179,23 +184,25 @@ class coco_pose(data.Dataset):
         anns = self.coco.loadAnns(annID)
 
         mask = get_mask(data, anns)  # anns has several people
-        S, L = gt_S_L(data, anns)
+        h, w, _ = data.shape
+        SL_sz = (self.sizeTo[0] / (self.scale * h), self.sizeTo[1] / (self.scale * w))
+        S, L = gt_S_L((self.sizeTo[0] // self.scale, self.sizeTo[1] // self.scale), anns, SL_sz)
 
+        data = cv2.resize(data, self.sizeTo, interpolation=cv2.INTER_LINEAR)
+        mask = cv2.resize(mask, (self.sizeTo[0] // self.scale, self.sizeTo[1] // self.scale),
+                          interpolation=cv2.INTER_NEAREST)
         # adjust their size to certain ones
-        S = S.transpose((1, 2, 0))
-        L = L.transpose((1, 2, 0))
+        # S = S.transpose((1, 2, 0))
+        # L = L.transpose((1, 2, 0))
+        '''
         data = size_adjust(data)
         S = size_adjust(S, scales=self.scale)  #
         L = size_adjust(L, scales=self.scale)  #
         mask = size_adjust(mask, scales=self.scale)  #
+        '''
 
-        ss = np.max(S, axis=2)
-        ll = np.max(L, axis=2)
         # all is tensor
-        data = torch.from_numpy(data.astype('float32')).permute(2, 0, 1)
-        mask = torch.unsqueeze(torch.from_numpy(mask.astype('float32')), 0)
-        S = torch.from_numpy(S.astype('float32')).permute(2, 0, 1)
-        L = torch.from_numpy(L.astype('float32')).permute(2, 0, 1)
+
 
         return data, mask, S, L
 

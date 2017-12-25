@@ -6,6 +6,7 @@ import numpy as np
 import math
 # from netmodule.loadimg import *
 from netmodule.config_file import *
+import matplotlib.pyplot  as plt
 
 
 class S_part_conf_map():
@@ -53,7 +54,7 @@ class S_part_conf_map():
 
         return canvas
 
-    def gaussian(self, width, height, coor, sigma=4):
+    def gaussian(self, width, height, coor, sigma=2):
         """
         gaussian like transform,turn coor to DN
         :param width:
@@ -176,10 +177,20 @@ class L_part_affinity_vector():
         return self.canvas
 
 
-def gt_S_L(data, anno):
+def trans_keypoints(key_points, SL_sz):
+    # transform keypoints to certain size:SL_sz
+    for i, key_person in enumerate(key_points):
+        for j in range(len(key_person) // 3):
+            x, y, v = key_person[3 * j:3 * (j + 1)]
+            x *= SL_sz[1]
+            y *= SL_sz[0]
+            key_points[i][3 * j:3 * (j + 1)] = [x, y, v]
+
+
+def gt_S_L(origin_sz, anno, SL_sz):
     """
     prepaer S for confidence map & L for part affinity
-    :return:
+    :return:img with sz of SL_sz
     """
     '''
     part_to_limb = coco['keypoints']  # coco18['keypoints']
@@ -189,39 +200,40 @@ def gt_S_L(data, anno):
     limb_sequence = coco_openpose['skeleton']  # coco18['limbSequence']
     keypoints_list = [i.get('keypoints') for i in anno if 'keypoints' in i]
 
+    lk = len(keypoints_list[0]) // 3
+    lp = len(part_to_limb)
     if len(keypoints_list[0]) // 3 != len(part_to_limb):  # multi person[[],[]]
         anno, parts_of_coco = prepare_data(anno)
         keypoints_list = [i.get('keypoints') for i in anno if 'keypoints' in i]
+        trans_keypoints(keypoints_list, SL_sz)
     else:
         parts_of_coco = len(keypoints_list[0]) // 3
     num_persons = len(anno)
 
-    height, width, _ = data.shape
+    height, width = origin_sz
     # parts_of_coco = 17  # 18 in openpose
 
     S = S_part_conf_map(width, height, keypoints_list, parts_of_coco)
     s_canvas = S.S_jk()
-
-    # show s_canvas
-    ss = np.max(s_canvas, axis=0)
-    sss = data * 0
-    for i in range(3):
-        sss[:, :, i] = (ss * 255) * 0.3 + data[:, :, i] * 0.7
-    # plt.imshow(sss)
-
-    # print("next is L")
-
 
     L = L_part_affinity_vector(limb_sequence, keypoints_list, width, height)
     l_canvas = L.L_ck()
 
     # show l_canvas
     ss1 = np.max(l_canvas, axis=0)
+    # show s_canvas
+    ss = np.max(s_canvas, axis=0)
+    '''
+    sss = np.zeros((height,width))
+    for i in range(3):
+        sss[:, :, i] = (ss * 255) * 0.3 + data[:, :, i] * 0.7  
+    # plt.imshow(sss)
+    # print("next is L")
     sss1 = data * 0
     for i in range(3):
         sss1[:, :, i] = (ss1 * 255) * 0.3 + data[:, :, i] * 0.7
     # plt.imshow(sss1)
-
+    '''
     # print('okLK')
     return s_canvas, l_canvas
 

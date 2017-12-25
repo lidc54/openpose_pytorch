@@ -10,6 +10,7 @@ import cv2
 import os
 from math import isnan
 import torchvision.models as models
+
 import numpy as np
 from netmodule.loadimg import coco_pose
 from netmodule.net import build_pose
@@ -24,6 +25,7 @@ def train():
     dataDir = '/home/jinx/PycharmProjects/pose-estimation/dataset/coco/'
     dataType = 'train2017'
     annType = 'person_keypoints'
+
     dataset = coco_pose(dataDir, dataType, annType, True)  # true meaning to single
 
     # to check the mean loss of the span
@@ -33,7 +35,7 @@ def train():
     max_iter = 120000
     batch_size = 8
     epoch_size = len(dataset) // batch_size
-    snap_shot = 100  # save parameters every times
+    snap_shot = 300  # save parameters every times
     parents = '../'
     path_the_net = parents + 'pose__{}__model.pth'
     resume = True
@@ -54,9 +56,9 @@ def train():
     net.cuda()
     cudnn.benchmark = True
 
-    lr = 1e-2
+    lr = 0.1
     momentum = 0.9
-    weight_decay = 1e-4
+    weight_decay = 1e-3
     # params = get_param(net, lr)
     # loss fn
 
@@ -78,10 +80,15 @@ def train():
             # create batch iterator
             batch_iterator = iter(data_loader)
 
+            # lr adjust
+            for param_lr in optimizer.param_groups:
+                param_lr['lr'] /= 2
+
             # save parameters  snap shot
             if not resume and iteration > 0:
                 torch.save({'iter': iteration, 'net_state': net.state_dict()}, path_the_net.format(iteration))
             resume = False
+
         img, mask, S, L = next(batch_iterator)
         img = Variable(img, requires_grad=True).cuda()
 

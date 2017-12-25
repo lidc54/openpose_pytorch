@@ -34,10 +34,10 @@ class lossPose(torch.nn.Module):
         """
         # wp, sp = ground_truth
         batchs, _, w, h = predication.shape
-        # mask = Variable(wp.expand(predication.shape)).cuda()
-
+        mask = Variable(wp).cuda()
+        truth = mask * Variable((sp.repeat(1, 6, 1, 1)).cuda())
         try:
-            loss_S = (predication - Variable(sp.repeat(1, 6, 1, 1)).cuda()) ** 2  # mask *
+            loss_S = (predication - truth) ** 2  # mask *
             return loss_S.sum() / (batchs)  # * w * h
         except Exception as e:
             print('wowo:', e)
