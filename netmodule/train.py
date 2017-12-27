@@ -59,15 +59,16 @@ def train():
     lr = 0.1
     momentum = 0.9
     weight_decay = 1e-3
-    # params = get_param(net, lr)
+    params = get_param(net, lr)
     # loss fn
-
+    optimizer = optim.SGD(params, momentum=momentum, weight_decay=weight_decay)
+    '''
     optimizer = optim.SGD([{'params': net.conf_bra.parameters()},
                            {'params': net.paf_bra.parameters()},
                            {'params': net.vgg[23].parameters()},
                            {'params': net.vgg[25].parameters()}],
                           lr=lr, momentum=momentum, weight_decay=weight_decay)
-
+    '''
     loss_pose = lossPose()
 
     print('prepare time is: ', time.time() - t0)
@@ -107,7 +108,7 @@ def train():
         optimizer.step()
 
         # mean loss of span
-        if loss.data[0] and not isnan(loss.data[0]):
+        if loss.data[0] and not isnan(loss.data[0]) and loss.data[0] != float("inf"):
             mean_loss.append(loss.data[0])
         if len(mean_loss) >= span:
             mean_loss.pop(0)
@@ -116,16 +117,16 @@ def train():
         iteration += 1
 
 
-def get_param(model, lr):
+def get_param(net, lr):
     # get param for optims,bias and weight have two lr
     lr1 = []
     lr2 = []
-    param_dict = dict(model.module.named_paramters())
-    for key, value in param_dict.items():
+
+    for key, value in net.named_parameters():
         if 'bias' in key:
-            lr2.append(value)
+            lr2.append(value)  # bias
         else:
-            lr1.append(value)
+            lr1.append(value)  # weight
     params = [{'params': lr1, 'lr': lr},
               {'params': lr2, 'lr': lr * 2}]
     return params
@@ -181,11 +182,15 @@ def vgg_init(net):
 
     model_dict.update(vgg_dict)
     net.load_state_dict(model_dict)
+
+    # should be update?
+    '''
     length = len(net)
     for i, layer in enumerate(net):
         if i <= length - 5:
             for j in layer.parameters():
                 j.requires_grad = False
+    '''
 
 
 def load_parameters(net, path):
